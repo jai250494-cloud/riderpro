@@ -1,0 +1,144 @@
+<!DOCTYPE html><html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RiderPro PRO+</title>
+<style>
+body{font-family:Arial;margin:0;background:#eef2f7}
+.container{padding:15px}
+input,button{padding:12px;margin:6px 0;width:100%;border-radius:8px;border:1px solid #ddd}
+button{background:#ff5c00;color:#fff;border:none;font-weight:bold}
+.card{background:#fff;padding:15px;margin:10px 0;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,0.08)}
+.map{width:100%;height:250px;border-radius:10px}
+</style>
+</head>
+<body><h2 style="padding:10px">🚀 RiderPro PRO+</h2>
+<div class="container"><div class="card">
+<h3>Auth</h3>
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
+<select id="role">
+<option value="customer">Customer</option>
+<option value="rider">Rider</option>
+</select>
+<button onclick="register()">Register</button>
+<button onclick="login()">Login</button>
+<button onclick="logout()">Logout</button>
+</div><div class="card">
+<h3>Create Order</h3>
+<input id="pickup" placeholder="Pickup">
+<input id="drop" placeholder="Drop">
+<button onclick="createOrder()">Create Order</button>
+</div><div class="card">
+<h3>Live Orders</h3>
+<div id="orders"></div>
+</div><div class="card">
+<h3>📍 Live Tracking</h3>
+<div id="map" class="map"></div>
+</div></div><script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_KEY"></script><script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let currentUser = null;
+let map, marker;
+
+// INIT MAP
+function initMap(lat=3.0,lng=101.0){
+  map = new google.maps.Map(document.getElementById("map"),{
+    center:{lat,lng},zoom:12
+  });
+
+  marker = new google.maps.Marker({position:{lat,lng},map});
+}
+initMap();
+
+// TRACK LOCATION
+navigator.geolocation.watchPosition(pos=>{
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+
+  if(marker){
+    marker.setPosition({lat,lng});
+    map.setCenter({lat,lng});
+  }
+});
+
+// AUTH
+window.register = async ()=>{
+  const user = await createUserWithEmailAndPassword(auth,email.value,password.value);
+  currentUser = user.user;
+
+  await addDoc(collection(db,'users'),{
+    uid: currentUser.uid,
+    role: role.value
+  });
+
+  alert('Registered');
+}
+
+window.login = async ()=>{
+  const user = await signInWithEmailAndPassword(auth,email.value,password.value);
+  currentUser = user.user;
+  alert('Logged in');
+}
+
+window.logout = ()=>{
+  signOut(auth);
+}
+
+// CREATE ORDER
+window.createOrder = async ()=>{
+  if(!currentUser) return alert('Login first');
+
+  await addDoc(collection(db,'orders'),{
+    pickup: pickup.value,
+    drop: drop.value,
+    status:'pending',
+    customer: currentUser.uid
+  });
+}
+
+// LIVE ORDERS
+onSnapshot(collection(db,'orders'), snap=>{
+  orders.innerHTML='';
+
+  snap.forEach(d=>{
+    const o=d.data();
+
+    orders.innerHTML += `
+    <div class="card">
+      <p>${o.pickup} → ${o.drop}</p>
+      <p>Status: ${o.status}</p>
+      ${o.status==='pending' ? `<button onclick="accept('${d.id}')">Accept</button>`:''}
+      ${o.status==='accepted' ? `<button onclick="contactRider()">Contact Rider</button>`:''}
+    </div>`;
+  });
+});
+
+// ACCEPT
+window.accept = async (id)=>{
+  await updateDoc(doc(db,'orders',id),{
+    status:'accepted',
+    rider: currentUser.uid
+  });
+}
+
+// CONTACT (WhatsApp)
+window.contactRider = ()=>{
+  const phone = prompt('Enter rider phone');
+  window.open(`https://wa.me/${phone}`,'_blank');
+}
+
+</script></body>
+</html>
